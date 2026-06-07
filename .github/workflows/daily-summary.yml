@@ -35,33 +35,59 @@ jobs:
             cp data/config.example.json data/config.json
           fi
 
-      - name: Inject Gemini & Arabic Config Dynamically
+      - name: Inject Gemini & Arabic Translation Prompts
         run: |
-          python -c '
           import json
-          with open("data/config.json", "r") as f:
-              data = json.load(f)
+          import os
+
+          # 1. تصحيح ملف الإعدادات وإجبار النظام على لغة المخرجات العربية
+          config_path = "data/config.json"
+          if os.path.exists(config_path):
+              with open(config_path, "r") as f:
+                  data = json.load(f)
+              
+              data["ai"] = {
+                  "provider": "gemini",
+                  "model": "gemini-1.5-flash",
+                  "api_key_env": "GOOGLE_API_KEY",
+                  "temperature": 0.3,
+                  "max_tokens": 4096,
+                  "throttle_sec": 0,
+                  "analysis_concurrency": 1,
+                  "enrichment_concurrency": 1
+              }
+              
+              if "language" not in data:
+                  data["language"] = {}
+              data["language"]["output_language"] = "ar"
+              
+              if "webhook" in data:
+                  data["webhook"]["request_body"]["card"]["header"]["title"]["content"] = "ملخص الأخبار اليومي من هورايزون"
+                  data["webhook"]["request_body"]["card"]["body"]["elements"][0]["content"] = "نتائج هورايزون: #{result}\nعدد الأخبار الهامة: #{important_items}/#{all_items}"
+
+              with open(config_path, "w") as f:
+                  json.dump(data, f, indent=2, ensure_ascii=False)
+
+          # 2. حقن أمر الترجمة الفورية للعربية في جميع قوالب البرومبت المتوفرة
+          prompt_dirs = ["src/prompts", "src/ai/prompts", "src/templates"]
+          arabic_instruction = "\n\n[CRITICAL INSTRUCTION: You must generate the entire response, including all news summaries, titles, core insights, categories, and analytical descriptions, in clear, professional, and structured Arabic (العربية الفصحى) only. Do not use English or Chinese for the final output text under any circumstances.]\n"
           
-          # إجبار النظام على تشغيل جيميناي فلاش 1.5 بالإعدادات الصحيحة
-          data["ai"] = {
-              "provider": "gemini",
-              "model": "gemini-1.5-flash",
-              "api_key_env": "GOOGLE_API_KEY",
-              "temperature": 0.3,
-              "max_tokens": 4096,
-              "throttle_sec": 0,
-              "analysis_concurrency": 1,
-              "enrichment_concurrency": 1
-          }
-          
-          # توجيه الـ Webhook والملخصات لتدعم الصياغة العربية الفصحى
-          if "webhook" in data:
-              data["webhook"]["request_body"]["card"]["header"]["title"]["content"] = "ملخص الأخبار اليومي من هورايزون"
-              data["webhook"]["request_body"]["card"]["body"]["elements"][0]["content"] = "نتائج هورايزون: #{result}\nعدد الأخبار الهامة: #{important_items}/#{all_items}\n\nتنبيه: يجب صياغة الملخصات التالية باللغة العربية الفصحى فقط."
-          
-          with open("data/config.json", "w") as f:
-              json.dump(data, f, indent=2, ensure_ascii=False)
-          '
+          for p_dir in prompt_dirs:
+              if os.path.exists(p_dir):
+                  for root, dirs, files in os.walk(p_dir):
+                      for file in files:
+                          if file.endswith((".md", ".txt", ".json")):
+                              file_path = os.path.join(root, file)
+                              try:
+                                  with open(file_path, "r", encoding="utf-8") as f:
+                                      content = f.read()
+                                  if "structured Arabic" not in content:
+                                      with open(file_path, "a", encoding="utf-8") as f:
+                                          f.write(arabic_instruction)
+                              except Exception:
+                                  pass
+          print("Arabic prompts injected successfully.")
+        shell: python
 
       - name: Run Horizon
         env:
@@ -80,6 +106,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs
           keep_files: true  # Keep existing summaries on gh-pages branch
-          commit_message: "📝 Daily Summary: ${{ env.DATE }}"
+          commit_message: "📝 Daily Summary (Arabic): ${{ env.DATE }}"
           publish_branch: gh-pages
           enable_jekyll: true
