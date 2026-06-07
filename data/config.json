@@ -2,7 +2,7 @@
   "version": "1.0",
   "ai": {
     "provider": "gemini",
-    "model": "gemini-2.0-flash",
+    "model": "gemini-1.5-flash",
     "api_key_env": "GOOGLE_API_KEY",
     "temperature": 0.3,
     "max_tokens": 4096,
@@ -132,7 +132,7 @@
         "header": {
           "title": {
             "tag": "plain_text",
-            "content": "#{message_title}"
+            "content": "ملخص الأخبار اليومي"
           },
           "template": "blue"
         },
@@ -140,7 +140,7 @@
           "elements": [
             {
               "tag": "markdown",
-              "content": "Horizon生成结果: #{result}\nHorizon日报重要资讯数量: #{important_items}/#{all_items}"
+              "content": "نتائج Horizon: #{result}\nعدد الأخبار الهامة: #{important_items}/#{all_items}"
             },
             {
               "tag": "hr"
