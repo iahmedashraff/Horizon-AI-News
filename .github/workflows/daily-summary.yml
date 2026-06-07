@@ -28,15 +28,46 @@ jobs:
         run: uv sync
 
       - name: Prepare GitHub Actions config
-        run: cp data/config.github.json data/config.json
+        run: |
+          if [ -f data/config.github.json ]; then
+            cp data/config.github.json data/config.json
+          elif [ -f data/config.example.json ]; then
+            cp data/config.example.json data/config.json
+          fi
+
+      - name: Inject Gemini & Arabic Config Dynamically
+        run: |
+          python -c '
+          import json
+          with open("data/config.json", "r") as f:
+              data = json.load(f)
+          
+          # إجبار النظام على تشغيل جيميناي فلاش 1.5 بالإعدادات الصحيحة
+          data["ai"] = {
+              "provider": "gemini",
+              "model": "gemini-1.5-flash",
+              "api_key_env": "GOOGLE_API_KEY",
+              "temperature": 0.3,
+              "max_tokens": 4096,
+              "throttle_sec": 0,
+              "analysis_concurrency": 1,
+              "enrichment_concurrency": 1
+          }
+          
+          # توجيه الـ Webhook والملخصات لتدعم الصياغة العربية الفصحى
+          if "webhook" in data:
+              data["webhook"]["request_body"]["card"]["header"]["title"]["content"] = "ملخص الأخبار اليومي من هورايزون"
+              data["webhook"]["request_body"]["card"]["body"]["elements"][0]["content"] = "نتائج هورايزون: #{result}\nعدد الأخبار الهامة: #{important_items}/#{all_items}\n\nتنبيه: يجب صياغة الملخصات التالية باللغة العربية الفصحى فقط."
+          
+          with open("data/config.json", "w") as f:
+              json.dump(data, f, indent=2, ensure_ascii=False)
+          '
 
       - name: Run Horizon
         env:
-          # Map secrets to environment variables expected by config.json
-          # Modify these based on your data/config.github.json provider settings
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           LWN_KEY: ${{ secrets.LWN_KEY }}
         run: uv run horizon --hours 48
 
